@@ -1,0 +1,14 @@
+# Router configuration file
+#
+# Sytax:
+# router-id <router-identifier>
+# input-ports <port_number1>, <port_number2>, ...
+# outputs <peer_input_port>-<metric>-<peer_router_id>, ...
+#
+# Note: allow empty lines and spaces, but it needs to use keywords 'router-id', 'input-ports'
+# and 'outputs', comments followed by '#' will be ignored.
+#
+
+router-id 3
+input-ports 3100, 3200
+outputs 2200-3-2, 4100-4-4 
