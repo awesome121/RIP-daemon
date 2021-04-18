@@ -1,13 +1,13 @@
 #!/bin/python3
 
-import sys, signal, socket, select, threading
+import sys, signal, socket, select, threading, time
 
 ROUTING_TABLE = {} # a diactionary of router_id: [next_hop_id, metrics, timer]
 INPUT_PORTS = []
 INPUT_SOCKETS = []
 LINKS = {} # router_id : (port, distance)
 ROUTER_ID = 0
-UPDATE_TIMER = 10
+PERIODIC_UPDATE_TIMER = 30 # 30 seconds
 TIMEOUT = 50
 GARBAGE_COLL_TIMER = 70
 
@@ -121,33 +121,47 @@ def bind_sockets():
 def listening_loop():
     """This function is for listening the packet for the network"""
     while True:
+        print("Routing table:")
         for entry in ROUTING_TABLE.items():
-            print(entry)
+            print(f'Dest: {entry[0]}, next hop: {entry[1][0]}, cost: {entry[1][1]}')
         print()        
         #print('Listening...')
-        readable, writble, excep = select.select(INPUT_SOCKETS, [], [])
+        readable, writble, excep = select.select(INPUT_SOCKETS, [], [], 1)
         for sock in readable:
             data = sock.recv(1024)
             packet_owner, entries = parse_rip_pkt(data)
             update_routing_table(packet_owner, entries)
+        process_timers()
         
-
+def process_timers():
+    current_time = time.perf_counter()
+    # if it's regular update time
+    if current_time - last_regular_time_up > PERIODIC_UPDATE_TIMER:
+        send_routing_table() 
+    
+    # for all the entries, if there is a time up
+    for router_id, (next_hop_id, metrics, timer) in ROUTING_TABLE.items():
+        # if this time up is 180 seconds time out
+        if timer[0] == 1 and current_time - timer[1] > 180:
+            ROUTING_TABLE[router_id_dest][1] = 16
+            ROUTING_TABLE[router_id][-1] = [2, timer.perf_counter()] # start garbage collection
+          
+        # if this time up is 120 seconds garbage collection  
+        elif timer[0] == 2 and current_time - timer[1] > 120:
+            ROUTING_TABLE.pop(router_id_dest)
+            send_routing_table()      
+            
 
 def update_routing_table(neighbor_router_id, entries):
     """routing table: router_id, next_hop_id, metrics, timer"""
-    if ROUTING_TABLE.get(neighbor_router_id) is None: # if the neighbor is not in routing table
-        timer = threading.Timer(TIMEOUT, entry_timer_handler, args=(neighbor_router_id, 0))
-        timer.start()        
-        ROUTING_TABLE[neighbor_router_id] = [neighbor_router_id, LINKS[neighbor_router_id][1], timer]
+    if ROUTING_TABLE.get(neighbor_router_id) is None: # if the neighbor is not in routing table       
+        ROUTING_TABLE[neighbor_router_id] = [neighbor_router_id, LINKS[neighbor_router_id][1], [1, time.perf_counter()]
     else:
         # refresh the neighbor router where the packet comes
         if LINKS[neighbor_router_id][1] < ROUTING_TABLE[neighbor_router_id][1]:
             ROUTING_TABLE[neighbor_router_id][0] = neighbor_router_id
-            ROUTING_TABLE[neighbor_router_id][1] = LINKS[neighbor_router_id][1]
-        ROUTING_TABLE[neighbor_router_id][2].cancel()
-        timer = threading.Timer(TIMEOUT, entry_timer_handler, args=(neighbor_router_id, 0))
-        timer.start()                    
-        ROUTING_TABLE[neighbor_router_id][2] = timer          
+            ROUTING_TABLE[neighbor_router_id][1] = LINKS[neighbor_router_id][1]              
+        ROUTING_TABLE[neighbor_router_id][2] = [1, time.perf_counter()]       
         
     for (router_id_dest, metric) in entries: # for each entry in this incoming packet
         new_route_metric = metric + ROUTING_TABLE[neighbor_router_id][1]
@@ -156,77 +170,59 @@ def update_routing_table(neighbor_router_id, entries):
             
         elif ROUTING_TABLE.get(router_id_dest) is None: # entry not in routing table
             if new_route_metric < 16: # it's a new and desirable route
-                timer = threading.Timer(TIMEOUT, entry_timer_handler, args=(router_id_dest, 0))
-                timer.start()
-                ROUTING_TABLE[router_id_dest] = [neighbor_router_id, metric+ROUTING_TABLE[neighbor_router_id][1], timer]
+                ROUTING_TABLE[router_id_dest] = [neighbor_router_id, metric+ROUTING_TABLE[neighbor_router_id][1], [1, time.perf_counter()]]
             else: # if the entry is not in the routing table and its metric is 16, ignore it
                 continue
             
         else: # already in routing table
             # the metric of this entry smaller than current entry
             if new_route_metric < ROUTING_TABLE[router_id_dest][1]: # new_route_metric < 16 and
-                print(1, ROUTER_ID, neighbor_router_id, metric, router_id_dest)
-                ROUTING_TABLE[router_id_dest][2].cancel()
+                #print(1, ROUTER_ID, neighbor_router_id, metric, router_id_dest)
                 ROUTING_TABLE[router_id_dest][0] = neighbor_router_id
-                ROUTING_TABLE[router_id_dest][1] = new_route_metric
-                timer = threading.Timer(TIMEOUT, entry_timer_handler, args=(router_id_dest, 0))
-                timer.start()                    
-                ROUTING_TABLE[router_id_dest][2] = timer
+                ROUTING_TABLE[router_id_dest][1] = new_route_metric                  
+                ROUTING_TABLE[router_id_dest][2] = [1, time.perf_counter()]
             
             # if the router does go through this neighbor where the packet comes (only update when it's valid)
             elif neighbor_router_id == ROUTING_TABLE[router_id_dest][0]:
                 # exactly same entry (and it's a valid entry, only refresh its timer)
                 if new_route_metric == ROUTING_TABLE[router_id_dest][1] and ROUTING_TABLE[router_id_dest][1] < 16:
-                    print(2, ROUTER_ID, neighbor_router_id, metric, router_id_dest)
-                    ROUTING_TABLE[router_id_dest][2].cancel()
-                    timer = threading.Timer(TIMEOUT, entry_timer_handler, args=(router_id_dest, 0))
-                    timer.start()                    
-                    ROUTING_TABLE[router_id_dest][2] = timer
+                    #print(2, ROUTER_ID, neighbor_router_id, metric, router_id_dest)       
+                    ROUTING_TABLE[router_id_dest][2] = [1, time.perf_counter()]
                 # entry come from the same hop, but metric is larger than the current entry's
                 elif new_route_metric > ROUTING_TABLE[router_id_dest][1] and ROUTING_TABLE[router_id_dest][1] < 16:
-                    print(3, ROUTER_ID, neighbor_router_id, metric, router_id_dest)
-                    ROUTING_TABLE[router_id_dest][1] = 16 if new_route_metric >= 16 else new_route_metric
-                    ROUTING_TABLE[router_id_dest][2].cancel()
-                    timer = threading.Timer(TIMEOUT, entry_timer_handler, args=(router_id_dest, 0))
-                    timer.start()                    
-                    ROUTING_TABLE[router_id_dest][2] = timer               
+                    #print(3, ROUTER_ID, neighbor_router_id, metric, router_id_dest)
+                    ROUTING_TABLE[router_id_dest][1] = 16 if new_route_metric >= 16 else new_route_metric              
+                    ROUTING_TABLE[router_id_dest][2] = [1, time.perf_counter()]          
                 
             
-                
-def entry_timer_handler(router_id_dest, flag): # 0 means 180 seconds, 1 means 120 seconds is up
-    print(router_id_dest, 'is up ', flag)
-    if flag == 0: # time out
-        timer = threading.Timer(GARBAGE_COLL_TIMER, entry_timer_handler, args=(router_id_dest, 1))
-        timer.start()
-        ROUTING_TABLE[router_id_dest][1] = 16
-        ROUTING_TABLE[router_id_dest][2] = timer
-    elif flag == 1: # garbage collection
-        ROUTING_TABLE.pop(router_id_dest)
-        send_routing_table()
-       
-          
+            
 def send_routing_table():
     """This function is use the binded port and IP adderss to send routing table """
     for peer_router_id, (port, _) in LINKS.items():
         pkt = get_rip_pkt(peer_router_id)
         INPUT_SOCKETS[0].sendto(pkt, ('127.0.0.1', port))
+                
+#def entry_timer_handler(router_id_dest, flag): # 0 means 180 seconds, 1 means 120 seconds is up
+    #print(f'Timeup: to {router_id_dest}', f'flag: {flag}')
+    #if flag == 0: # time out
+        
+        #ROUTING_TABLE[router_id_dest][2] = time.perf_counter()
+    #elif flag == 1: # garbage collection
+        #ROUTING_TABLE.pop(router_id_dest)
+        #send_routing_table()
 
 
-def set_regular_update_timer():
-    """set the update timer every 30 second """
-    send_routing_table()
-    threading.Timer(UPDATE_TIMER, set_regular_update_timer).start()
+#def set_regular_update_timer():
+    #"""set the update timer every 30 second """
+    #send_routing_table()
+    #threading.Timer(UPDATE_TIMER, set_regular_update_timer).start()
     
 
-
 def main():
-    #try:
-        parse_conf_file()
-        bind_sockets()
-        set_regular_update_timer()
-        listening_loop()
-    #except:
-        #pass
+    parse_conf_file()
+    bind_sockets()
+    set_regular_update_timer()
+    listening_loop()
 
 
 
