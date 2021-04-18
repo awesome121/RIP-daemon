@@ -8,8 +8,8 @@ INPUT_SOCKETS = []
 LINKS = {} # router_id : (port, distance)
 ROUTER_ID = 0
 PERIODIC_UPDATE_TIMER = 30 # 30 seconds
-TIMEOUT = 50
-GARBAGE_COLL_TIMER = 70
+TIMEOUT = 50 # 180 seconds
+GARBAGE_COLL_TIMER = 70 # 120 seconds
 
 
 def parse_conf_file():
@@ -86,7 +86,7 @@ def get_rip_pkt(router_id_peer):
 
     pkt = bytearray([2, 2, 0, ROUTER_ID]) # set the package header with local router ID
     # combine the all entries in to the one packet
-    for router_id_dest, (next_hop_id, metrics, timer) in ROUTING_TABLE.items():  # use loop put all entries in the arrayList 
+    for router_id_dest, (next_hop_id, metrics, _) in ROUTING_TABLE.items():  # use loop put all entries in the arrayList 
         if next_hop_id == router_id_peer: 
             metrics = 16 # add poison
         pkt += bytearray([0]*4 + [0, 0, 0, router_id_dest] + [0] * 8 + [0, 0, 0, metrics])
@@ -120,42 +120,52 @@ def bind_sockets():
 
 def listening_loop():
     """This function is for listening the packet for the network"""
-    while True:
-        print("Routing table:")
-        for entry in ROUTING_TABLE.items():
-            print(f'Dest: {entry[0]}, next hop: {entry[1][0]}, cost: {entry[1][1]}')
-        print()        
+    last_regular_time_up = time.perf_counter()
+    send_routing_table()
+    while True:       
         #print('Listening...')
         readable, writble, excep = select.select(INPUT_SOCKETS, [], [], 1)
         for sock in readable:
             data = sock.recv(1024)
             packet_owner, entries = parse_rip_pkt(data)
             update_routing_table(packet_owner, entries)
-        process_timers()
+            print_routing_table()
+        last_regular_time_up = process_timers(last_regular_time_up)
         
-def process_timers():
+def process_timers(last_regular_time_up):
     current_time = time.perf_counter()
     # if it's regular update time
     if current_time - last_regular_time_up > PERIODIC_UPDATE_TIMER:
-        send_routing_table() 
+        print_routing_table()
+        send_routing_table()
+        last_regular_time_up = time.perf_counter()
     
     # for all the entries, if there is a time up
     for router_id, (next_hop_id, metrics, timer) in ROUTING_TABLE.items():
         # if this time up is 180 seconds time out
-        if timer[0] == 1 and current_time - timer[1] > 180:
-            ROUTING_TABLE[router_id_dest][1] = 16
+        #print(timer[0], current_time - timer[1])
+        if timer[0] == 1 and current_time - timer[1] > TIMEOUT:
+            print(1)
+            ROUTING_TABLE[router_id][1] = 16
             ROUTING_TABLE[router_id][-1] = [2, timer.perf_counter()] # start garbage collection
           
         # if this time up is 120 seconds garbage collection  
-        elif timer[0] == 2 and current_time - timer[1] > 120:
-            ROUTING_TABLE.pop(router_id_dest)
-            send_routing_table()      
+        elif timer[0] == 2 and current_time - timer[1] > GARBAGE_COLL_TIMER:
+            print(2)
+            ROUTING_TABLE.pop(router_id)
+            send_routing_table()   
+    return last_regular_time_up
             
+def print_routing_table():
+    print("Routing table:")
+    for entry in ROUTING_TABLE.items():
+        print(f'Dest: {entry[0]}, next hop: {entry[1][0]}, cost: {entry[1][1]}, timer: {entry[1][-1]}')
+    print() 
 
 def update_routing_table(neighbor_router_id, entries):
     """routing table: router_id, next_hop_id, metrics, timer"""
     if ROUTING_TABLE.get(neighbor_router_id) is None: # if the neighbor is not in routing table       
-        ROUTING_TABLE[neighbor_router_id] = [neighbor_router_id, LINKS[neighbor_router_id][1], [1, time.perf_counter()]
+        ROUTING_TABLE[neighbor_router_id] = [neighbor_router_id, LINKS[neighbor_router_id][1], [1, time.perf_counter()]]
     else:
         # refresh the neighbor router where the packet comes
         if LINKS[neighbor_router_id][1] < ROUTING_TABLE[neighbor_router_id][1]:
@@ -221,7 +231,6 @@ def send_routing_table():
 def main():
     parse_conf_file()
     bind_sockets()
-    set_regular_update_timer()
     listening_loop()
 
 
