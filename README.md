@@ -1,11 +1,11 @@
 # RIP_router_daemon
-Routering daemon implementing Simplified RIPv2, it also implements split horizon with poisoned reverse.
+Routering daemon implementing Simplified RIPv2, it also implements split horizon with poisoned reverse.<br>
 We use port number instead of IP address.
 
 # Run
-$./daemon.py router1
-$./daemon.py router2
-$./daemon.py router3
+$./daemon.py router1<br>
+$./daemon.py router2<br>
+$./daemon.py router3<br>
 ...
 
 # Note
