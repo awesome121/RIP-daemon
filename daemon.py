@@ -11,7 +11,7 @@
 
 import sys, socket, select, time, random, datetime
 
-ROUTING_TABLE = {} # a diactionary of router_id: [next_hop_id, metrics, timer]
+ROUTING_TABLE = {} # a dictionary of router_id: [next_hop_id, metrics, timer]
 INPUT_PORTS = []
 INPUT_SOCKETS = []
 LINKS = {} # router_id : (port, distance)
