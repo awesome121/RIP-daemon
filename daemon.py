@@ -1,5 +1,3 @@
-#!/bin/python3
-
 """
    RIP daemon     COSC364      RFC 2453
    Please include router configuration file in the same directory as this daemon.py
