@@ -45,16 +45,16 @@ According to [RFC2453](https://datatracker.ietf.org/doc/html/rfc2453), the perio
 ## Example
 <img src="./example_img/router1_conf.png" height=240 width=600>
 
-(Configuration file of router 1)
+*(Figure1 Configuration file of router 1)*
 
 <img src="./example_img/router1.png" height=240 width=600>
 
-(Running router1 configuration file)
+*(Figure2 Running router1 configuration file)*
 
 <img src="./example_img/router2.png" height=240 width=600>
 
-(Running router2 configuration file)
+*(Figure3 Running router2 configuration file)*
 
 <img src="./example_img/router3.png" height=240 width=600>
 
-(Running router3 configuration file)
+*(Figure4 Running router3 configuration file)*
