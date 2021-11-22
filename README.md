@@ -1,5 +1,5 @@
 # RIP_router_daemon
-Routering daemon implementing Simplified [Routing Information Protocol](https://datatracker.ietf.org/doc/html/rfc2453) (RIPv2), </br>it also implements split horizon with poisoned reverse.
+Routering daemon implementing Simplified [Routing Information Protocol](https://datatracker.ietf.org/doc/html/rfc2453) (RIPv2), </br>Features such as split horizon with poisoned reverse are implemented.
 
 *Note: We use different port number instead of IP address to simulate different routers.*
 
