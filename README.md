@@ -10,7 +10,7 @@ Please make sure [Python3](https://www.python.org/downloads/) is installed.
 
 ## Configuration file
 Every router has a unique configuration file and unique router id.
-Its input ports should be distinct as well because this simulates differet address. The same reason applies to outputs, which is the input ports of its neighbors.
+Its input ports should be distinct as well because this simulates differet address. The same reason applies to outputs, which is the input ports of its neighbors. Please see example below.
 
 **General Sytax:**
 ```
@@ -43,6 +43,10 @@ $python3 daemon.py router3
 According to [RFC2453](https://datatracker.ietf.org/doc/html/rfc2453), the periodic update time is 30 seconds. Timeout when a router is offline is 180 seconds. Garbage collection timer is 120 seconds. Its corresponding timer is implemented following this RFC specification. Therefore, please wait for sufficient time allowing its convergence.
 
 ## Example
+<img src="./example_img/router1_conf.png" height=240 width=600>
+
+(Configuration file of router 1)
+
 <img src="./example_img/router1.png" height=240 width=600>
 
 (Running router1 configuration file)
